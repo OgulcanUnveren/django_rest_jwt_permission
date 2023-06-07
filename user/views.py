@@ -5,8 +5,14 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet, ModelViewSet
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny,IsAuthenticated
 from user.permission import IsAdminUser, IsLoggedInUserOrSuperAdmin, IsAdminOrAnonymousUser
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from django.shortcuts import render
+from rest_framework.views import APIView
+from .serializers import UserSerializer
+from rest_framework.response import Response
+
 # from user.permission import HasGroupPermission
 #
 # permission importing from my_permission fro APIView
@@ -19,7 +25,7 @@ from user.serializers import UserSerializer
 class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = []
     # permission_classes = (HasGroupPermission, )
     # permission_groups = {
     #     'create': ['admin'],
@@ -42,30 +48,29 @@ class UserViewSet(ModelViewSet):
         return [permission() for permission in permission_classes]
 
 
-# APIView defined for UserView
-# class UserView(APIView):
-#     authentication_classes = [TokenAuthentication]
-#     permission_classes = [APIViewPermission]
-#     required_groups = {
-#         'GET': ['anonymous'],
-#         'POST': ['admin'],
-#         'PUT': ['__all__']
-#     }
-#
-#     def get(self, request):
-#         user = User.objects.all()
-#         return Response({"users": user})
 
+@api_view(['GET']) # Add this
+@permission_classes([IsAuthenticated]) # Maybe add this too
+def getusers(request):
+    products = User.objects.all()
+    serializer = UserSerializer(products, many=True)
+    return Response(serializer.data)
+@api_view(['POST']) # Add this
+@permission_classes([IsAdminUser]) # Maybe add this too
+def deluser(request):
+    id = request.POST.get('id')
+    products = User.objects.filter(id=id)
+    if products is not None:
+        User.objects.filter(id=id).delete()
+        data = {
+            '200':'success'
+        }
+        return Response(data)
 
-class LoginView(ViewSet):
-    serializer_class = AuthTokenSerializer
-
-    @staticmethod
-    def create(request):
-        return ObtainAuthToken().post(request)
-
-
-class LogoutView(APIView):
-    def get(self, request, format=None):
-        request.user.auth_token.delete()
-        return Response(status=status.HTTP_200_OK)
+# view for registering users
+class RegisterView(APIView):
+    def post(self, request):
+        serializer = UserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
